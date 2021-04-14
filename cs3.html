@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Packing</title>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+	<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+	
+	<script>
+		function runScript(error,data){
+			if(error){console.log(error); return 0;}
+			
+			var height=1200;
+			var width=800;
+			var cutoff=80;
+			var randomFlip=false; 
+			
+			var svg = d3.select("body").append("svg").attr("width",width).attr("height",height);
+			let freq={};
+			for (var i=0;i<data.length;i++){
+				if(data[i]["review"]==null){
+					continue;
+				}
+				let words=data[i]["review"].split(" ");
+				for(var j=0;j<words.length;j++){
+					var word=words[j].toUpperCase().split(".")[0].split(",")[0];
+					if(freq[word]== undefined){
+						freq[word]=[1,0];
+					}
+					else {
+						freq[word][0]++;
+					}
+					if (data[i]["recommendation"]=="Recommended"){
+						freq[word][1]++;
+					}
+					else{
+						freq[word][1]--;
+					}
+				}
+			}
+			var cut = [];
+			for (var word in freq) {
+				cut.push([word, freq[word][0]]);
+			}
+			cut=cut.filter(function(d){return (d[1]>=cutoff && d[1]<1000 && isNaN(d[0]) && d[0].length > 1);});
+			let blocks=[]
+			svg.selectAll(".dummy").data(cut)
+				.enter()
+				.append("text")
+				.attr("font-size", function(d) { return parseInt(d[1]/10);})
+				.text(function(d){return d[0];})
+				.style("font-weight","bold")
+				.each(function(d) {
+					blocks.push([d[0],parseInt(this.getComputedTextLength())+2,parseInt(d[1]/10)+2, freq[d[0]][1]/d[1]]);
+					this.remove();
+				});
+			min=0;
+			max=0;
+			for(var i=0;i<blocks.length;i++){
+				if(blocks[i][3]<min){
+					min=blocks[i][3];
+				}
+				if(blocks[i][3]>max){
+					max=blocks[i][3];
+				}
+			}
+			var color = d3.scaleLinear().domain([min,max]).range(['red', 'green']);
+			var spaces=[[0,0,width,height]];
+			for(var i=0;i<blocks.length;i++)
+			{
+				var best=-1;
+				var area=(width*height)+1;
+				var ch=false;
+				var cv=false;
+				for(var j=0;j<spaces.length;j++)
+				{
+					if(((spaces[j][3]-spaces[j][1])*(spaces[j][2]-spaces[j][0]))<area){
+						var hh=false;
+						var vv=false;
+						if(((spaces[j][2]-spaces[j][0])>=blocks[i][1])&&((spaces[j][3]-spaces[j][1])>=blocks[i][2])){
+							best=j;
+							area=(spaces[j][3]-spaces[j][1])*(spaces[j][2]-spaces[j][0]);
+							hh=true;
+						}
+						if(((spaces[j][2]-spaces[j][0])>=blocks[i][2])&&((spaces[j][3]-spaces[j][1])>=blocks[i][1])){
+							best=j;
+							area=(spaces[j][3]-spaces[j][1])*(spaces[j][2]-spaces[j][0]);
+							vv=true;
+						}
+						if(hh||vv){
+							ch=hh;
+							cv=vv;
+						}
+					}
+				}
+				var hor=true;
+				if(best==-1){
+					console.log("not enough space");
+					break;
+				}
+				if(ch && (!cv)){
+					hor=true;
+				}
+				else if((!ch)&& cv){
+					hor=false;
+				}
+				else{
+					if(randomFlip){
+						if(Math.round(Math.random())==0){
+							hor=true;
+						}
+						else{
+							hor=false;
+						}
+					}
+					else{
+						hor=true;
+					}
+				}
+				if(hor){
+					svg.append("text")
+						.attr("font-size",blocks[i][2]-2)
+						.attr("x",spaces[best][0]+1)
+						.attr("y",spaces[best][3]-1)
+						.text(blocks[i][0])
+						.style("fill",color(blocks[i][3]))
+						.style("font-weight","bold");
+					spaces.push([spaces[best][0]+blocks[i][1],spaces[best][3]-blocks[i][2],spaces[best][2],spaces[best][3]]);
+					spaces.push([spaces[best][0],spaces[best][1],spaces[best][2],spaces[best][3]-blocks[i][2]]);
+					spaces.splice(best,1);
+				}
+				else{
+					svg.append("text")
+						.attr("font-size",blocks[i][2]-2)
+						.attr("x",spaces[best][0]+1+blocks[i][2])
+						.attr("y",spaces[best][3]-1)
+						.attr("transform","rotate(-90,"+(spaces[best][0]+blocks[i][2])+","+spaces[best][3]+")")
+						.text(blocks[i][0])
+						.style("fill",color(blocks[i][3]))
+						.style("font-weight","bold");
+					spaces.push([spaces[best][0]+blocks[i][2],spaces[best][3]-blocks[i][1],spaces[best][2],spaces[best][3]]);
+					spaces.push([spaces[best][0],spaces[best][1],spaces[best][2],spaces[best][3]-blocks[i][1]]);	
+					spaces.splice(best,1);
+				}
+			}
+		}
+	</script>
+</head>
+<body onload = "d3.json('steam_reviews.json',runScript)" ></body>
+</html>
